@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -40,15 +41,25 @@ func (c *DriveUploadCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 	defer file.Close()
 
+	reader := io.Reader(file)
+	if driveUploadShouldStripMarkdownFrontmatter(opts, c.KeepFrontmatter) {
+		data, readErr := io.ReadAll(file)
+		if readErr != nil {
+			return readErr
+		}
+		data = stripYAMLFrontmatter(data)
+		reader = bytes.NewReader(data)
+	}
+
 	_, svc, err := requireDriveService(ctx, flags)
 	if err != nil {
 		return err
 	}
 
 	if opts.replaceFileID == "" {
-		return runDriveCreateUpload(ctx, svc, file, opts)
+		return runDriveCreateUpload(ctx, svc, reader, opts)
 	}
-	return runDriveReplaceUpload(ctx, svc, file, opts)
+	return runDriveReplaceUpload(ctx, svc, reader, opts)
 }
 
 func prepareDriveUpload(c *DriveUploadCmd) (driveUploadOptions, error) {
@@ -92,6 +103,10 @@ func prepareDriveUpload(c *DriveUploadCmd) (driveUploadOptions, error) {
 	}
 
 	return opts, nil
+}
+
+func driveUploadShouldStripMarkdownFrontmatter(opts driveUploadOptions, keepFrontmatter bool) bool {
+	return !keepFrontmatter && opts.convert && opts.mimeType == mimeTextMarkdown
 }
 
 func runDriveCreateUpload(ctx context.Context, svc *drive.Service, file io.Reader, opts driveUploadOptions) error {
