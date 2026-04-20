@@ -35,21 +35,11 @@ func (c *DriveUploadCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	file, err := os.Open(opts.localPath)
+	media, err := openDriveUploadMedia(opts, c.KeepFrontmatter)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-
-	reader := io.Reader(file)
-	if driveUploadShouldStripMarkdownFrontmatter(opts, c.KeepFrontmatter) {
-		data, readErr := io.ReadAll(file)
-		if readErr != nil {
-			return readErr
-		}
-		data = stripYAMLFrontmatter(data)
-		reader = bytes.NewReader(data)
-	}
+	defer media.Close()
 
 	_, svc, err := requireDriveService(ctx, flags)
 	if err != nil {
@@ -57,9 +47,9 @@ func (c *DriveUploadCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if opts.replaceFileID == "" {
-		return runDriveCreateUpload(ctx, svc, reader, opts)
+		return runDriveCreateUpload(ctx, svc, media, opts)
 	}
-	return runDriveReplaceUpload(ctx, svc, reader, opts)
+	return runDriveReplaceUpload(ctx, svc, media, opts)
 }
 
 func prepareDriveUpload(c *DriveUploadCmd) (driveUploadOptions, error) {
@@ -107,6 +97,26 @@ func prepareDriveUpload(c *DriveUploadCmd) (driveUploadOptions, error) {
 
 func driveUploadShouldStripMarkdownFrontmatter(opts driveUploadOptions, keepFrontmatter bool) bool {
 	return !keepFrontmatter && opts.convert && opts.mimeType == mimeTextMarkdown
+}
+
+func openDriveUploadMedia(opts driveUploadOptions, keepFrontmatter bool) (io.ReadCloser, error) {
+	file, err := os.Open(opts.localPath)
+	if err != nil {
+		return nil, err
+	}
+	if !driveUploadShouldStripMarkdownFrontmatter(opts, keepFrontmatter) {
+		return file, nil
+	}
+
+	data, readErr := io.ReadAll(file)
+	closeErr := file.Close()
+	if readErr != nil {
+		return nil, readErr
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	return io.NopCloser(bytes.NewReader(stripYAMLFrontmatter(data))), nil
 }
 
 func runDriveCreateUpload(ctx context.Context, svc *drive.Service, file io.Reader, opts driveUploadOptions) error {

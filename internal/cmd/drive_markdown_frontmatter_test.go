@@ -23,6 +23,16 @@ func TestStripYAMLFrontmatter(t *testing.T) {
 			want: "body",
 		},
 		{
+			name: "closing_delimiter_at_eof",
+			in:   "---\nx: 1\n---",
+			want: "",
+		},
+		{
+			name: "crlf",
+			in:   "---\r\nx: 1\r\n---\r\nbody\r\n",
+			want: "body\r\n",
+		},
+		{
 			name: "empty_body",
 			in:   "---\nx: 1\n---\n",
 			want: "",

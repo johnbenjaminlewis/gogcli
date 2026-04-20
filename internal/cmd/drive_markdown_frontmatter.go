@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"strings"
 )
 
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
@@ -14,24 +13,35 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 func stripYAMLFrontmatter(b []byte) []byte {
 	orig := b
 	b = bytes.TrimPrefix(b, utf8BOM)
-	s := string(b)
-	if !strings.HasPrefix(s, literalMarkdownTripleDash) {
+	firstLine, rest, ok := cutMarkdownLine(b)
+	if !ok || !isYAMLFrontmatterDelimiter(firstLine) {
 		return orig
 	}
-	firstNL := strings.IndexByte(s, '\n')
-	if firstNL < 0 {
-		return orig
-	}
-	if strings.TrimSpace(s[:firstNL]) != literalMarkdownTripleDash {
-		return orig
-	}
-	rest := s[firstNL+1:]
-	restLines := strings.Split(rest, "\n")
-	for i, line := range restLines {
-		if strings.TrimSpace(line) == literalMarkdownTripleDash {
-			body := strings.Join(restLines[i+1:], "\n")
-			return []byte(body)
+
+	for len(rest) > 0 {
+		var line []byte
+		line, rest, ok = cutMarkdownLine(rest)
+		if isYAMLFrontmatterDelimiter(line) {
+			if ok {
+				return rest
+			}
+			return nil
+		}
+		if !ok {
+			break
 		}
 	}
 	return orig
+}
+
+func cutMarkdownLine(b []byte) (line []byte, rest []byte, ok bool) {
+	i := bytes.IndexByte(b, '\n')
+	if i < 0 {
+		return bytes.TrimSuffix(b, []byte{'\r'}), nil, false
+	}
+	return bytes.TrimSuffix(b[:i], []byte{'\r'}), b[i+1:], true
+}
+
+func isYAMLFrontmatterDelimiter(line []byte) bool {
+	return string(bytes.TrimSpace(line)) == literalMarkdownTripleDash
 }
