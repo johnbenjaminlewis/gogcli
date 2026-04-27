@@ -114,16 +114,6 @@ func docsDocumentEndIndex(doc *docs.Document) int64 {
 	return end
 }
 
-func findTabByID(tabs []*docs.Tab, tabID string) *docs.Tab {
-	tabID = strings.TrimSpace(tabID)
-	for _, tab := range tabs {
-		if tab != nil && tab.TabProperties != nil && tab.TabProperties.TabId == tabID {
-			return tab
-		}
-	}
-	return nil
-}
-
 func docsTabEndIndex(tab *docs.Tab) int64 {
 	if tab == nil || tab.DocumentTab == nil || tab.DocumentTab.Body == nil {
 		return 1
@@ -162,7 +152,7 @@ func docsTargetEndIndex(ctx context.Context, svc *docs.Service, docID, tabID str
 		return docsDocumentEndIndex(doc), nil
 	}
 
-	tab := findTabByID(flattenTabs(doc.Tabs), tabID)
+	tab := findTab(flattenTabs(doc.Tabs), tabID)
 	if tab == nil {
 		return 0, fmt.Errorf("tab not found: %s", tabID)
 	}
